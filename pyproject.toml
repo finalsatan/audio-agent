@@ -1,0 +1,10 @@
+[project]
+name = "audio-agent-pipecat"
+version = "0.1.0"
+description = "Minimal local voice agent for English speaking practice, built on Pipecat + DeepSeek"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pipecat-ai[kokoro,local,local-smart-turn,mlx-whisper,openai,silero,whisper]>=1.16.0",
+    "python-dotenv>=1.2.4",
+]
