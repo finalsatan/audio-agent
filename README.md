@@ -65,8 +65,9 @@ uv run python smoke_test.py
 ```
 
 It imports the same pipeline modules, sends one text turn through the configured
-DeepSeek backend, prints the reply, and synthesizes one sentence to
-`smoke_tts.wav` using the configured local Qwen3-TTS voice.
+DeepSeek backend, prints the reply, synthesizes one sentence to `smoke_tts.wav`
+with the configured local Qwen3-TTS voice, and then transcribes that WAV with
+the configured Parakeet TDT handler, asserting a non-empty transcript.
 
 ## Configuration
 
@@ -123,17 +124,18 @@ agent by voice, set it to `false`.
 | `run.sh` | Loads `.env` and starts the demo. |
 | `config.yaml` | Realtime pipeline: VAD, STT, LLM and TTS blocks. |
 | `tutor_prompt.txt` | System prompt for the conversation partner. |
-| `smoke_test.py` | Hardware-free check of imports, LLM turn and TTS output. |
+| `smoke_test.py` | Hardware-free check of imports, LLM turn, TTS output and Parakeet round-trip. |
 | `bootstrap_nltk.py` | Fetches the NLTK resources used at startup. |
 | `.env.example` | Placeholder environment variables. |
 
 ## Known limitations
 
-- Live speech was not available in the build environment. The local command
-  started and reached `Ready — start speaking.`, the server answered a
-  WebSocket text turn with spoken audio, and `smoke_test.py` synthesized audio
-  to a WAV file. Real microphone capture and speaker playback still need a
-  human check.
+- Live human speech was not available in the build environment. The local
+  command started and reached `Ready — start speaking.`, the server answered a
+  WebSocket text turn with spoken audio, and `smoke_test.py` round-tripped
+  synthesized speech through the real Parakeet handler. Microphone capture and
+  speaker playback still need a human check, and the STT check uses TTS audio
+  rather than a human recording.
 - DeepSeek is a network dependency. The demo keeps STT and TTS local, but the
   transcribed text and conversation history are sent to the DeepSeek API.
 - The installed `speech-to-speech` version (1.1.0) does not expose acoustic
