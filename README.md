@@ -13,7 +13,7 @@ Everything runs locally except the LLM (DeepSeek's OpenAI-compatible API):
 | VAD | Silero, bundled in `livekit-local-inference` (`inference.VAD`) | local, no download |
 | End-of-turn | `inference.TurnDetector(version="v1-mini")` (on-device audio EOT model) | local |
 | STT | `local_stt.WhisperSTT` — custom `stt.STT` over MLX Whisper (`whisper-small.en`) | local |
-| LLM | `openai.LLM` plugin pointed at `https://api.deepseek.com`, model `deepseek-flash` | cloud |
+| LLM | `openai.LLM` plugin pointed at `https://api.deepseek.com`, model `deepseek-flash`, thinking disabled, 120-token cap | cloud |
 | TTS | `local_tts.KokoroTTS` — custom `tts.TTS` over `kokoro-onnx` (Kokoro-82M, voice `af_heart`) | local |
 
 There is **no official LiveKit plugin** for MLX/local Whisper or Kokoro on PyPI
@@ -51,9 +51,11 @@ uv run agent.py console
 Speak after the greeting. Ctrl+T switches to text mode (type instead of talk),
 Ctrl+C quits. macOS will ask for microphone permission on first run.
 
-Offline smoke test (no mic, no LiveKit server — imports, one DeepSeek turn, one
-Kokoro sentence written to `out/smoke_tts.wav`, and an MLX Whisper transcription
-of that wav):
+Hardware-free smoke test — no microphone, no speakers, no LiveKit server (STT/TTS
+are local, but the single DeepSeek turn needs network): imports `agent.py` and its
+entrypoint, loads the local VAD/turn-detector, runs one DeepSeek turn with the demo
+config, synthesizes one Kokoro sentence to `out/smoke_tts.wav`, and transcribes that
+wav with MLX Whisper.
 
 ```bash
 uv run smoke_test.py
@@ -83,6 +85,7 @@ Edit `.env` (or the defaults in `config.py`):
 | `TUTOR_SPEED` | `1.0` | Kokoro speaking rate |
 | `TUTOR_WHISPER_MODEL` | `mlx-community/whisper-small.en-mlx` | Any MLX Whisper HF repo (`whisper-base.en-mlx`, `whisper-large-v3-turbo`, …) |
 | `DEEPSEEK_MODEL` | `deepseek-flash` | DeepSeek model name |
+| `TUTOR_MAX_REPLY_TOKENS` | `120` | `max_completion_tokens` cap on each spoken reply |
 
 The tutor's behaviour lives in **`prompt.py`** (`TUTOR_PROMPT`) — edit it to change
 persona, correction style, or reply length.
@@ -92,10 +95,14 @@ persona, correction style, or reply length.
 - **Console mode is deprecated** in LiveKit Agents 1.8 (printed warning); it still
   works. The Go-based `lk agent console` is the future replacement and needs the
   LiveKit CLI installed.
+- **DeepSeek thinking is disabled** (`extra_body={"thinking": {"type": "disabled"}}`):
+  `deepseek-flash` is a reasoning model and spent 1.5 s+ / 40-90 hidden tokens before
+  the first spoken token; disabling it cut first-token latency from ~1.5 s to ~0.6 s
+  here. Replies are capped at `TUTOR_MAX_REPLY_TOKENS` (120) tokens.
 - **Both STT and TTS are non-streaming**, so replies start after the first sentence
   is fully synthesized. Measured on an M5: Whisper ≈0.2 s for a 6 s utterance,
-  Kokoro ≈0.3 s per sentence (≈0.1× real time), DeepSeek ≈1–3 s for the first token
-  (it is a reasoning model).
+  Kokoro ≈0.3 s per sentence (≈0.1× real time), DeepSeek ≈0.6 s to the first token
+  with thinking disabled.
 - **No barge-in feedback loop is modelled**: the Mac speakers are picked up by the
   Mac microphone unless you use headphones, so the agent can hear itself. Use
   headphones for a clean demo. (Console mode does not run echo cancellation.)
@@ -106,5 +113,9 @@ persona, correction style, or reply length.
   to turn-detector-v1-mini` (an eagerly-created default detector that is not used)
   and, when stdin is not a TTY, a `termios` traceback from the key listener.
 - Only English is configured (`whisper-small.en` + `lang="en-us"` Kokoro).
-- Verified without a microphone via `smoke_test.py`; the mic/speaker path was
-  exercised manually on macOS only.
+- **No real human conversation over the microphone was verified.** `smoke_test.py`
+  covers imports/entrypoint, the local VAD + turn detector, the DeepSeek turn, Kokoro
+  synthesis and an MLX Whisper round-trip of synthesized audio. `agent.py console`
+  was only started non-interactively (it greeted and logged the pipeline running),
+  never with a person actually speaking into the mic, so live mic capture, human
+  speech recognition accuracy, barge-in and speaker echo are untested.

@@ -1,8 +1,8 @@
 """Minimal English speaking-practice voice agent built with LiveKit Agents 1.x.
 
-Runs fully on the local machine in console mode (Mac mic + speakers), with local
-STT (MLX Whisper) and local TTS (Kokoro) and DeepSeek as the LLM. No LiveKit
-server or LiveKit Cloud account is required.
+Runs in console mode on the local machine (Mac mic + speakers): local STT (MLX
+Whisper), local TTS (Kokoro) and DeepSeek as the only network dependency. No
+LiveKit server or LiveKit Cloud account is required.
 
     uv run agent.py console
 """

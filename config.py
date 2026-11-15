@@ -17,6 +17,9 @@ load_dotenv(ROOT / ".env")
 # --- DeepSeek (OpenAI-compatible) LLM -------------------------------------
 DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-flash")
+# Spoken replies are 1-3 sentences; cap the completion so a runaway generation can
+# never stall the voice turn. ~120 tokens is roughly 4-5 sentences.
+MAX_REPLY_TOKENS = int(os.getenv("TUTOR_MAX_REPLY_TOKENS", "120"))
 
 # --- Local STT / TTS ------------------------------------------------------
 # MLX Whisper model on the Hugging Face Hub (Apple Silicon friendly).
@@ -36,7 +39,14 @@ VAD_SILENCE_SECONDS = float(os.getenv("TUTOR_VAD_SILENCE_SECONDS", "0.45"))
 
 
 def build_llm():
-    """The LLM used by both the demo and the smoke test."""
+    """The LLM used by both the demo and the smoke test.
+
+    ``deepseek-flash`` is a reasoning model: by default it spends 1-2 s and ~40-90
+    hidden reasoning tokens before the first spoken token. For a real-time voice
+    agent that is pure latency, so thinking is disabled through DeepSeek's own
+    request-body flag (``thinking: {"type": "disabled"}``, forwarded via the
+    plugin's ``extra_body``). DeepSeek also accepts ``max_completion_tokens``.
+    """
     api_key = os.getenv("DEEPSEEK_API_KEY")
     if not api_key:
         raise RuntimeError("DEEPSEEK_API_KEY is missing; put it in .env (see .env.example)")
@@ -46,4 +56,6 @@ def build_llm():
         api_key=api_key,
         base_url=DEEPSEEK_BASE_URL,
         temperature=0.7,
+        max_completion_tokens=MAX_REPLY_TOKENS,
+        extra_body={"thinking": {"type": "disabled"}},
     )
