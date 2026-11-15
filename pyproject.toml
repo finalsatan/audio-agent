@@ -1,0 +1,12 @@
+[project]
+name = "audio-agent-livekit"
+version = "0.1.0"
+description = "Local English speaking-practice voice agent on LiveKit Agents (local Whisper STT + Kokoro TTS, DeepSeek LLM)"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "kokoro-onnx>=0.6.1",
+    "livekit-agents[openai]~=1.2",
+    "mlx-whisper>=0.4.3",
+    "python-dotenv>=1.2.4",
+]
