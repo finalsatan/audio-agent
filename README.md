@@ -1,46 +1,88 @@
-# 英文口语练习语音 Agent：三个 Demo 概览
+# 英文口语练习语音 Agent（macOS Apple Silicon）
 
-平台：macOS Apple Silicon。三个 demo 分别在不同 git worktree / 分支中，互不修改。
-**只有 LLM 走云端**：DeepSeek 官方 API，模型 `deepseek-flash`。STT 和 TTS 都在本地运行。`.env` 只需要 `DEEPSEEK_API_KEY` 和 `DEEPSEEK_BASE_URL`，不要把密钥写进代码或提交到 git。
+面向 **macOS Apple Silicon** 的本地英文口语练习语音 Agent：
+- **本地 STT**：MLX Whisper `large-v3-turbo`（Apple Silicon GPU 加速，带静音与重复幻觉过滤）
+- **本地 TTS**：Kokoro-82M（`kokoro-onnx`，24 kHz，默认美式女声 `af_heart`）
+- **本地轮次检测**：Silero VAD（`confidence=0.6`, `stop_secs=1.2s`）+ Smart Turn v3（`1.5s`），支持语音打断（barge-in）
+- **云端 LLM**：DeepSeek 官方 API（`deepseek-flash`，显式锁定 `thinking=disabled` 降低首字延迟）
+- **实时字幕与复盘记录**：终端实时打印每轮对话与 STT/LLM/TTS 耗时，并自动将练习记录保存至 `transcripts/YYYY-MM-DD_HH-MM-SS.md`
 
-## 分支、路径与运行命令
+> **请佩戴耳机使用。** 当前为本地 CLI 音频流，不含声学回声消除（AEC）；外放时可能误触发打断。
 
-| 分支 | 绝对路径 | 启动命令 | 无麦克风 smoke test |
-|---|---|---|---|
-| `demo/hf-s2s` | `/Users/murphy/code/ai/audio-agent-hf-s2s` | `./run.sh` | `uv run python smoke_test.py` |
-| `demo/pipecat` | `/Users/murphy/code/ai/audio-agent-pipecat` | `uv run bot.py` | `uv run smoke_test.py` |
-| `demo/livekit` | `/Users/murphy/code/ai/audio-agent-livekit` | `uv run agent.py console` | `uv run smoke_test.py` |
+---
 
-三个 demo 都需要先安装 PortAudio（`brew install portaudio`）、用 `uv sync` 创建 Python 3.12 环境，并把 DeepSeek key 放进各自目录下被 gitignore 的 `.env`。
+## 快速开始
 
-## STT / TTS 差异
+### 1. 安装依赖
 
-| 分支 | 本地 STT | 本地 TTS | 备注 |
-|---|---|---|---|
-| `demo/hf-s2s` | NVIDIA Parakeet TDT 0.6B v3，MLX（`mlx-community/parakeet-tdt-0.6b-v3`），多语言自动识别 | Qwen3-TTS 12Hz 1.7B CustomVoice，MLX 6bit，英文音色 `Aiden` | Hugging Face `speech-to-speech` 的 local 模式；Silero VAD + Smart Turn；默认 1.2 s 停顿；播放时默认关闭麦克风以避免自激 |
-| `demo/pipecat` | MLX Whisper large-v3-turbo（`mlx-community/whisper-large-v3-turbo`） | Kokoro-82M（`kokoro-onnx`，24 kHz），默认 `af_heart` | Pipecat `LocalAudioTransport`；Silero VAD + Smart Turn；约 1.2 s 停顿；支持打断 |
-| `demo/livekit` | MLX Whisper small.en（`mlx-community/whisper-small.en-mlx`） | Kokoro-82M（`kokoro-onnx`），默认 `af_heart` | LiveKit Agents `console` 模式（不需要 LiveKit server/账号）；Silero VAD + TurnDetector；约 1.2 s endpointing；`Ctrl+T` 可切文字模式 |
+```bash
+brew install portaudio
+uv sync
+```
 
-三个 demo 的 STT/TTS 模型、量化、框架和流式策略都不同，因此**这不是同一模型下的 apples-to-apples 延迟对比**；只能说明各方案能跑通，不能据此直接比较谁更快或音质更好。
+### 2. 配置 DeepSeek API Key
 
-## 使用建议
+```bash
+cp .env.example .env
+# 在 .env 中填入你的 DEEPSEEK_API_KEY
+```
 
-- **请使用耳机。** 三个实现都没有可靠的声学回声消除；外放时 agent 可能听到自己的声音并误触发打断。`demo/hf-s2s` 默认在播放时关闭麦克风来规避，但这样也会失去语音打断。
-- 首次运行会下载本地模型，可能较慢；之后走本地缓存。
-- 三个 demo 的 turn-taking 都刻意放宽了停顿阈值（约 1.0–1.5 s），适合学习者思考时停顿。
+### 3. 运行无麦克风 Smoke Test（可选）
 
-## 验证状态
+验证模块导入、DeepSeek 显式关闭 thinking 配置、单轮文本对话、Kokoro 合成 WAV 与 MLX Whisper 回环识别：
 
-- 三个 demo 都提供了无麦克风的 smoke test：导入管线、跑一轮 DeepSeek 文本对话、用本地 TTS 合成 WAV；Pipecat/LiveKit 以及最新的 `hf-s2s` smoke test 还会把 WAV 回灌给本地 STT 做识别检查。
-- **真实麦克风输入和真人对话尚未验证。** 当前验证只覆盖模块导入、LLM 文本回合、TTS 合成，以及三个 demo 均已覆盖的 TTS WAV → STT 回环识别；没有覆盖真人说话、设备权限、回声、打断和实际听感。需要人工在 macOS 上戴耳机复核。
-- 云端依赖只有 DeepSeek API；如果 DeepSeek 不可达，三个 demo 都无法生成回复。STT/TTS/音频采集/播放均为本地。
+```bash
+uv run smoke_test.py
+```
 
-## 修改入口
+### 4. 启动语音口语练习
 
-- `demo/hf-s2s`：`tutor_prompt.txt`（系统提示）、`config.yaml`（音色、VAD 停顿、模型、客户端设置）。
-- `demo/pipecat`：`config.py`（`TUTOR_SYSTEM_PROMPT`、`STT_MODEL`、`TTS_VOICE`、`VAD_STOP_SECS`、`SMART_TURN_STOP_SECS`）。
-- `demo/livekit`：`prompt.py`（`TUTOR_PROMPT`）、`config.py`（Whisper/Kokoro 模型、音色、endpointing 参数）。
+戴上耳机后运行：
 
-## 实现说明
+```bash
+uv run bot.py
+```
 
-本概览与三个 demo 的协作实现/验证流程使用 Herdr + pi + WorkBuddy DeepSeek Flash。
+启动后 Agent（Sam）会先主动打招呼，听到声音即可直接对话。对话过程中终端会实时打印：
+- `[HH:MM:SS] YOU   : ...`（学习者转写 + STT 耗时）
+- `[HH:MM:SS] TUTOR : ...`（助手回复，若被打断会标注 `[interrupted]`）
+- `[HH:MM:SS] STATS : LLM / TTS / Tokens`（每轮延迟与 token 消耗）
+
+按 `Ctrl+C` 结束会话，完整对话记录会实时落盘在 `transcripts/` 目录下（已加入 `.gitignore`）。
+
+---
+
+## 常用配置项
+
+所有参数均可在 [config.py](config.py) 修改，或直接在 `.env` 中通过环境变量覆盖：
+
+| 环境变量 | 默认值 | 说明 |
+|---|---|---|
+| `DEEPSEEK_API_KEY` | （必填） | DeepSeek 官方 API Key |
+| `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | DeepSeek API 地址 |
+| `DEEPSEEK_MODEL` | `deepseek-flash` | 对话模型（代码已显式锁定 `thinking=disabled`） |
+| `STT_MODEL` | `mlx-community/whisper-large-v3-turbo` | 本地 MLX Whisper 模型 |
+| `TTS_VOICE` | `af_heart` | Kokoro 音色（如 `af_heart`, `af_bella`, `am_michael`, `bf_emma`, `bm_george`） |
+| `TTS_SPEED` | `1.0` | 语速（学习者可设为 `0.9` 放慢语速） |
+| `VAD_STOP_SECS` | `1.2` | 说话停顿判定阈值（秒），放宽以允许思考 |
+| `SMART_TURN_STOP_SECS` | `1.5` | Smart Turn v3 最大等待上限（秒） |
+| `VAD_CONFIDENCE` | `0.6` | Silero VAD 置信度门槛，过滤轻微底噪 |
+| `SAVE_TRANSCRIPT` | `true` | 是否自动保存 Markdown 对话记录 |
+| `TRANSCRIPTS_DIR` | `./transcripts` | 对话记录保存目录 |
+| `AUDIO_INPUT_DEVICE` / `AUDIO_OUTPUT_DEVICE` | 系统默认 | 可选 PyAudio 设备索引 |
+
+修改人设或纠错风格请编辑 [config.py](config.py) 中的 `TUTOR_SYSTEM_PROMPT` 与 `GREETING_INSTRUCTION`。
+
+---
+
+## 架构选型记录（三个 Demo 实测对比）
+
+项目早期通过三个独立分支（`demo/pipecat`、`demo/livekit`、`demo/hf-s2s`）并行原型验证，并在 macOS 上佩戴耳机完成了真人语音实测与同模型 A/B 对比，最终选定 **`demo/pipecat`** 合入 `main`：
+
+| 排名 | 历史分支 | 实测核心结论 |
+|---|---|---|
+| **#1（已合入 `main`）** | `demo/pipecat` | **综合体验最优**：`whisper-large-v3-turbo` 对非母语口语准确率最稳；VAD（`confidence=0.6` + `1.2s` + Smart Turn v3）抗底噪极佳，打断流畅；官方原生集成 STT/TTS/VAD/DeepSeek，零胶水代码、零代理环境坑。 |
+| **#2** | `demo/livekit` | 框架的 `TurnDetector v1-mini` 与抢跑生成（Preemptive Generation）很强，但默认 `whisper-small.en` 存在大量 `"Thank you."` 幻觉与重复乱码；即便换上同样的 `whisper-large-v3-turbo` 与 `no_speech_prob` 过滤，本地 `console` 模式下默认 Silero VAD 过于敏感且 `vad` 打断激进，仍会频繁把底噪识成 `"Thank you."` 并误打断助手；且 `console` 模式已标记 deprecated。 |
+| **#3** | `demo/hf-s2s` | Parakeet TDT 0.6B 推理极快（50–170 ms）且监控埋点完整，但对带口音英文的词错率偏高（易带偏多轮对话）、端到端首响固定 2.4–3.1 s、默认播音关麦不支持打断，且在开启 macOS 系统 SOCKS 代理时本地 WebSocket 易启动失败。 |
+
+三个历史对比分支仍保留在仓库中供查阅。
